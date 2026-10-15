@@ -104,7 +104,7 @@ end
 
 """
     electrolyte_fvm_rhs(c_e_tilde::AbstractVector, eps_e_n::Real, a_sn::Real, a_sp::Real,
-                        j_tot_n::Real, j_tot_p::Real, cell::CellParams)
+                        j_tot_n::Real, j_tot_p::Real, cell::CellParams, deps_e_n_dt::Real = 0)
 
 Out-of-place (Zygote-compatible, mutation-free) conservative axial Finite-Volume
 discretization for dimensionless electrolyte concentration `c_e_tilde = c_e / c_e0`
@@ -113,6 +113,9 @@ across anode (`N_n`), separator (`N_s`), and cathode (`N_p`).
 Uses Bruggeman effective diffusivity `D_{e,m}^eff = D_e * eps_{e,m}^1.5` and harmonic mean
 diffusivity at control volume interfaces:
 `D_{e,m+1/2}^eff = (dx_m + dx_{m+1}) / (dx_m / D_{e,m}^eff + dx_{m+1} / D_{e,m+1}^eff)`.
+
+The anode porosity may change in time (SEI pore clogging). Lithium is conserved in the form
+`d(eps_e * c_e)/dt = div(J) + source`, so anode cells carry the extra term `-c_e * deps_e_n_dt / eps_e_n`.
 """
 function electrolyte_fvm_rhs(
     c_e_tilde::AbstractVector,
@@ -122,10 +125,12 @@ function electrolyte_fvm_rhs(
     j_tot_n::Real,
     j_tot_p::Real,
     cell::CellParams,
+    deps_e_n_dt::Real = 0,
 )
     T = promote_type(
         eltype(c_e_tilde),
         typeof(eps_e_n),
+        typeof(deps_e_n_dt),
         typeof(a_sn),
         typeof(a_sp),
         typeof(j_tot_n),
@@ -181,7 +186,8 @@ function electrolyte_fvm_rhs(
         dx_m, eps_m, _, aj_m = cell_props(m)
         J_plus  = interface_flux(m)
         J_minus = interface_flux(m - 1)
-        return (J_plus - J_minus) / (eps_m * dx_m) + (trans_factor / eps_m) * aj_m
+        dilution = m <= N_n ? -c_e_tilde[m] * T(deps_e_n_dt) / eps_m : zero(T)
+        return (J_plus - J_minus) / (eps_m * dx_m) + (trans_factor / eps_m) * aj_m + dilution
     end
 
     return map(cell_rhs, 1:N_x)
@@ -189,7 +195,8 @@ end
 
 """
     electrolyte_fvm_rhs!(dc_e_dt::AbstractVector, c_e_tilde::AbstractVector, eps_e_n::Real,
-                         a_sn::Real, a_sp::Real, j_tot_n::Real, j_tot_p::Real, cell::CellParams)
+                         a_sn::Real, a_sp::Real, j_tot_n::Real, j_tot_p::Real, cell::CellParams,
+                         deps_e_n_dt::Real = 0)
 
 In-place conservative axial Finite-Volume discretization for dimensionless electrolyte concentration.
 """
@@ -202,8 +209,9 @@ function electrolyte_fvm_rhs!(
     j_tot_n::Real,
     j_tot_p::Real,
     cell::CellParams,
+    deps_e_n_dt::Real = 0,
 )
-    rhs = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell)
+    rhs = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell, deps_e_n_dt)
     @inbounds for m in eachindex(rhs)
         dc_e_dt[m] = rhs[m]
     end

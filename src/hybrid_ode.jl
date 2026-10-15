@@ -123,12 +123,14 @@ function ude_rhs(
     dc_sn = spherical_fvm_rhs(c_sn, D_sn_T, cell.R_n, j_int_n, cell.c_sn_max, N_r)
     dc_sp = spherical_fvm_rhs(c_sp, D_sp_T, cell.R_p, j_int_p, cell.c_sp_max, N_r)
 
-    # 2. Electrolyte-phase axial FVM diffusion updates
-    dc_e = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell)
-
-    # 3. Coupled degradation & thermal ODEs
+    # 2. SEI growth and pore clogging (porosity rate feeds the electrolyte balance)
     ddelta_sei_tilde = -(T(cell.M_sei) / (T(2.0) * T(F_CONST) * T(cell.rho_sei) * T(DELTA_SEI_SCALE))) * j_deg
     deps_e_n         = model.enable_pore_clogging ? (-a_sn * T(DELTA_SEI_SCALE) * ddelta_sei_tilde) : zero(T)
+
+    # 3. Electrolyte-phase axial FVM diffusion updates
+    dc_e = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell, deps_e_n)
+
+    # 4. Remaining degradation & thermal ODEs
     deps_s_n         = zero(T)
     dQ_lli           = -(T(cell.A_cell) * T(cell.L_n) * a_sn / T(3600.0)) * j_deg
 
@@ -211,10 +213,9 @@ function spmet_rhs(
 
     dc_sn = spherical_fvm_rhs(c_sn, D_sn_T, cell.R_n, j_int_n, cell.c_sn_max, N_r)
     dc_sp = spherical_fvm_rhs(c_sp, D_sp_T, cell.R_p, j_int_p, cell.c_sp_max, N_r)
-    dc_e  = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell)
-
     ddelta_sei_tilde = -(T(cell.M_sei) / (T(2.0) * T(F_CONST) * T(cell.rho_sei) * T(DELTA_SEI_SCALE))) * j_deg
     deps_e_n         = enable_pore_clogging ? (-a_sn * T(DELTA_SEI_SCALE) * ddelta_sei_tilde) : zero(T)
+    dc_e  = electrolyte_fvm_rhs(c_e_tilde, eps_e_n, a_sn, a_sp, j_tot_n, j_tot_p, cell, deps_e_n)
     deps_s_n         = zero(T)
     dQ_lli           = -(T(cell.A_cell) * T(cell.L_n) * a_sn / T(3600.0)) * j_deg
 
