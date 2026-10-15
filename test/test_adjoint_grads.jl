@@ -73,7 +73,7 @@ using Zygote
         w_V = 1.0,
         w_Q = 100.0,
         sensealg = sensealg,
-        solver = Tsit5(),
+        solver = Rodas5P(),
         reltol = 1.0e-10,
         abstol = 1.0e-12,
     )

@@ -15,7 +15,7 @@ The network is trained on noisy voltage and capacity data from cycling. Afterwar
 
 - **Conservative FVM.** Spherical particles (2 × 12 shells) and a 16-cell axial electrolyte with harmonic-mean face diffusivities. Solid and electrolyte lithium inventory are conserved to ~1e-15 relative error.
 - **Sign-constrained SEI current.** The network output goes through `-j_scale * softplus(NN(z_sei))`, so the side-reaction current is always cathodic (≤ 0).
-- **Adjoint gradients.** `ude_rhs` is out-of-place and doesn't mutate, so it works with `InterpolatingAdjoint(autojacvec=ZygoteVJP())` and `Rodas5P()`. Gradients agree with `ForwardDiff` to a relative error of 4e-14.
+- **Adjoint gradients.** `ude_rhs` is out-of-place and doesn't mutate, so it works with `InterpolatingAdjoint(autojacvec=ZygoteVJP())` and `Rodas5P()`. Through the stiff `Rodas5P` solve, adjoint gradients agree with `ForwardDiff` to a relative error of 2.6e-10.
 - **SINDy distillation.** STLSQ on column-normalized features recovers the Tafel-diffusion form of the SEI rate from the trained network.
 
 ## Results
@@ -37,7 +37,7 @@ UDE training, holdout extrapolation and SINDy recovery:
 | Solid Li conservation (`test_conservation.jl`) | rel. error < 1e-12 | 1.166e-15 |
 | Electrolyte Li conservation (`test_conservation.jl`) | rel. error < 1e-12 | 9.691e-16 |
 | 1C discharge (`test_forward_physics.jl`) | V(0) in [4.1, 4.3] V, monotonic to 2.8 V | 4.101 V → 2.800 V at t = 3637.7 s |
-| Adjoint vs. ForwardDiff (`test_adjoint_grads.jl`) | cos sim > 0.999, rel. error < 1e-4 | cos = 1.0, rel. error = 4.0e-14 |
+| Adjoint vs. ForwardDiff through `Rodas5P` (`test_adjoint_grads.jl`) | cos sim > 0.999, rel. error < 1e-4 | cos = 1.0, rel. error = 2.6e-10 |
 | Training, Adam + L-BFGS | loss reduced ≥ 100× | 207.5× (2.892 → 1.394e-2) |
 | Holdout voltage RMSE, cycles 19–25 | < 5 mV | 0.759 mV (untrained: 25.51 mV) |
 | SINDy fit of SEI rate | recover the hidden law | `j_deg = -0.0003064 exp(-α η_sei) / (1 + δ̃_sei)`, R² = 0.962 |
