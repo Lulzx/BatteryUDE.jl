@@ -33,9 +33,11 @@ export electrolyte_overpotential, terminal_voltage, thermal_rhs
 export ad_softplus, build_sei_network, build_lam_network, init_sei_surrogate
 export sei_feature_vector, eval_sei_current, true_tafel_sei_current
 export HybridSPMeTModel, ude_rhs, spmet_rhs, voltage_cutoff_callback, build_ude_problem
-export CycleRecord, SyntheticTwinDataset, default_cycle_current
+export CycleRecord, SyntheticTwinDataset, default_cycle_current, default_c_rate_schedule
 export adjoint_trajectory_loss, generate_synthetic_twin_data
-export simulate_cycle_ude, evaluate_holdout_cycles, multi_cycle_training_loss, train_battery_ude!
+export cycle_start_state, sei_inputs, predicted_voltage, rollout_cycles
+export evaluate_holdout_cycles, sei_rate_parity, observable_rollout_loss, threaded_forward_gradient, train_battery_ude!
 export SINDyDistillationResult, stlsq_sparse_regression, distill_sei_sindy
+export SINDyFreeformResult, distill_sei_sindy_freeform
 
 end # module BatteryUDE

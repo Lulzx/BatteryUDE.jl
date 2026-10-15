@@ -116,11 +116,14 @@ end
 
 """
     true_tafel_sei_current(theta_n_surf::Real, eta_int_n_approx::Real, delta_sei_tilde::Real,
-                           T_kelvin::Real = T_REF; i0_sei::Real = 1.5e-6, U_sei_ref::Real = 0.4)
+                           T_kelvin::Real = T_REF; i0_sei::Real = 1.5e-6, U_sei_ref::Real = 0.4,
+                           beta_sei::Real = 0.5, m_diff::Real = 1.0)
 
 Ground-truth diffusion-limited cathodic Tafel kinetics for synthetic digital-twin generation:
-`j_deg^true(t) = - (i0_sei * exp(-0.5 * F / (R * T) * eta_sei(t))) / (1 + max(delta_sei_tilde(t), 0))`,
-where `eta_sei(t) = U_n(theta_n^surf) + eta_int_n_approx - U_sei_ref`.
+`j_deg^true(t) = - (i0_sei * exp(-beta_sei * F / (R * T) * eta_sei(t))) / (1 + max(delta_sei_tilde(t), 0))^m_diff`,
+where `eta_sei(t) = U_n(theta_n^surf) + eta_int_n_approx - U_sei_ref`. The defaults (`beta_sei = 0.5`,
+`m_diff = 1`) give the standard symmetric Tafel-diffusion law; other values generate laws outside
+the fixed-alpha SINDy library.
 """
 @inline function true_tafel_sei_current(
     theta_n_surf::Real,
@@ -129,12 +132,14 @@ where `eta_sei(t) = U_n(theta_n^surf) + eta_int_n_approx - U_sei_ref`.
     T_kelvin::Real = T_REF;
     i0_sei::Real = 1.5e-6,
     U_sei_ref::Real = 0.4,
+    beta_sei::Real = 0.5,
+    m_diff::Real = 1.0,
 )
     T = promote_type(typeof(theta_n_surf), typeof(eta_int_n_approx), typeof(delta_sei_tilde), typeof(T_kelvin), typeof(i0_sei))
     U_n = ocp_graphite(T(theta_n_surf))
     eta_sei = U_n + T(eta_int_n_approx) - T(U_sei_ref)
     # Clamp exponential argument to prevent numerical overflow during extreme trial steps
-    exp_arg = clamp(-T(0.5) * T(F_CONST) / (T(R_GAS) * T(T_kelvin)) * eta_sei, T(-40.0), T(40.0))
-    denom   = one(T) + max(T(delta_sei_tilde), zero(T))
+    exp_arg = clamp(-T(beta_sei) * T(F_CONST) / (T(R_GAS) * T(T_kelvin)) * eta_sei, T(-40.0), T(40.0))
+    denom   = (one(T) + max(T(delta_sei_tilde), zero(T)))^T(m_diff)
     return -T(i0_sei) * exp(exp_arg) / denom
 end

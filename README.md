@@ -20,6 +20,8 @@ The network is trained on noisy voltage and capacity data from cycling. Afterwar
 
 ## Results
 
+> **Status (in progress).** The training pipeline was rewritten to use only observable data: noisy terminal voltage and noisy per-cycle capacity fade, with C-rates varied across cycles and holdout cycles at unseen C-rates. The previous version fed the network the hidden true SEI current and internal states during training. The training, holdout and SINDy rows below, and the training figure, come from that previous version and will be replaced once the new runs finish. A free-form SINDy library, in which the Tafel slope is fitted rather than fixed, has also been added; on the old network it does not recover the hidden law (fitted alpha 26.5 vs. true 19.46 V^-1). The physics and gradient rows are current.
+
 SPMeT forward simulation, 1C discharge:
 
 <p align="center">
@@ -55,7 +57,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 Run the full synthetic training and SINDy example:
 
 ```bash
-julia --project=. scripts/train_synthetic_twin.jl
+julia --project=. --threads=auto scripts/train_synthetic_twin.jl
 ```
 
 From Julia:

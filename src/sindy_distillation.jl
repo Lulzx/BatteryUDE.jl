@@ -187,3 +187,178 @@ function distill_sei_sindy(
         alpha,
     )
 end
+
+"""
+    SINDyFreeformResult
+
+Results of the free-form (log-space) SINDy distillation, where the Tafel slope `alpha`
+and the SEI diffusion exponent are fitted rather than fixed.
+"""
+struct SINDyFreeformResult
+    basis_names::Vector{String}
+    coefficients::Vector{Float64}
+    active_mask::BitVector
+    r2_log::Float64
+    r2_linear::Float64
+    alpha_fit::Float64
+    alpha_theory::Float64
+    diffusion_exponent::Float64
+    i0_fit::Float64
+    equation_str::String
+end
+
+"""
+    distill_sei_sindy_freeform(model::HybridSPMeTModel, p;
+                               eta_sei_grid = range(-0.34, -0.27, length = 15),
+                               delta_sei_grid = range(0.05, 1.50, length = 15),
+                               theta_n_grid = range(0.77, 0.80, length = 4),
+                               U_sei_ref::Real = 0.40,
+                               lambda_ridge::Real = 1e-4,
+                               rel_threshold::Real = 0.05,
+                               print_result::Bool = true,
+                               j_target_fn = nothing,
+                               samples = nothing,
+                               beta_ref::Real = 0.5)
+
+Free-form SINDy distillation that does not assume the Tafel slope. The sign-constrained
+network guarantees `j_deg < 0`, so the regression target is `log(-j_deg)` and STLSQ runs over
+the generic library `{ 1, eta, eta^2, delta, log(1 + delta), theta_n, eta * delta }`
+(with `eta` and `theta_n` centered on the sample means for conditioning). A Tafel-diffusion law
+`j = -i0 * exp(-alpha * eta) / (1 + delta)^m` appears as the active set `{1, eta, log(1 + delta)}`
+with `alpha = -xi_eta` and `m = -xi_log(1+delta)`. `alpha_theory = beta_ref * F / (R * T_ref)` is
+reported for comparison only and does not enter the fit.
+
+Pass `samples = (; theta_n, j_tot_n, eta_int_n, delta)` (vectors) to fit at specific states, such as
+the states the model visits in a rollout, instead of the tensor grid.
+
+Pass `j_target_fn(theta_n, eta_int_n, delta)` to fit a known function (e.g. the ground-truth law)
+instead of the network, which checks the regression itself independently of training.
+"""
+function distill_sei_sindy_freeform(
+    model::HybridSPMeTModel,
+    p;
+    eta_sei_grid = range(-0.34, -0.27, length = 15),
+    delta_sei_grid = range(0.05, 1.50, length = 15),
+    theta_n_grid = range(0.77, 0.80, length = 4),
+    U_sei_ref::Real = 0.40,
+    lambda_ridge::Real = 1.0e-4,
+    rel_threshold::Real = 0.05,
+    print_result::Bool = true,
+    j_target_fn = nothing,
+    samples = nothing,
+    beta_ref::Real = 0.5,
+)
+    cell = model.cell
+    alpha_theory = Float64(beta_ref) * F_CONST / (R_GAS * cell.T_ref)
+
+    basis_names = [
+        "1",
+        "eta",
+        "eta^2",
+        "delta",
+        "log(1 + delta)",
+        "theta_n",
+        "eta * delta",
+    ]
+    n_basis = length(basis_names)
+
+    # Evaluation points (theta_n, j_tot_n, eta_int_n, delta): either supplied states or a tensor grid
+    points = if samples === nothing
+        pts = NTuple{4, Float64}[]
+        for th_n in theta_n_grid
+            U_n = ocp_graphite(Float64(th_n))
+            i0_n = exchange_current_density(cell.k_n, 1.0, cell.c_e0, cell.c_sn_max, Float64(th_n))
+            for eta_sei in eta_sei_grid
+                eta_int_n = Float64(eta_sei) + Float64(U_sei_ref) - U_n
+                j_tot_n   = 2.0 * i0_n * sinh((F_CONST / (2.0 * R_GAS * cell.T_ref)) * eta_int_n)
+                for d_sei in delta_sei_grid
+                    push!(pts, (Float64(th_n), j_tot_n, eta_int_n, Float64(d_sei)))
+                end
+            end
+        end
+        pts
+    else
+        collect(zip(Float64.(samples.theta_n), Float64.(samples.j_tot_n), Float64.(samples.eta_int_n), Float64.(samples.delta)))
+    end
+
+    eta_sei_of(pt) = ocp_graphite(pt[1]) + pt[3] - Float64(U_sei_ref)
+    eta_bar = mean(eta_sei_of, points)
+    th_bar  = mean(pt -> pt[1], points)
+
+    n_total = length(points)
+    Theta   = zeros(Float64, n_total, n_basis)
+    j_nn    = zeros(Float64, n_total)
+
+    for (row, pt) in enumerate(points)
+        th_n, j_tot_n, eta_int_n, d = pt
+        z_sei = sei_feature_vector(th_n, j_tot_n, eta_int_n, d)
+        j_nn[row] = j_target_fn === nothing ?
+            Float64(eval_sei_current(model.nn_sei, z_sei, p, model.st_sei, model.p_axes; j_scale = model.j_scale)) :
+            Float64(j_target_fn(th_n, eta_int_n, d))
+
+        x_eta = eta_sei_of(pt) - eta_bar
+        Theta[row, 1] = 1.0
+        Theta[row, 2] = x_eta
+        Theta[row, 3] = x_eta^2
+        Theta[row, 4] = d
+        Theta[row, 5] = log1p(d)
+        Theta[row, 6] = th_n - th_bar
+        Theta[row, 7] = x_eta * d
+    end
+
+    all(<(0.0), j_nn) || error("Free-form SINDy needs a strictly cathodic network output (j_deg < 0).")
+    y_log = log.(-j_nn)
+
+    xi, active = stlsq_sparse_regression(
+        Theta,
+        y_log;
+        lambda_ridge = lambda_ridge,
+        rel_threshold = rel_threshold,
+    )
+
+    y_log_hat = Theta * xi
+    r2_log    = 1.0 - sum(abs2, y_log .- y_log_hat) / max(sum(abs2, y_log .- mean(y_log)), 1.0e-16)
+    j_hat     = -exp.(y_log_hat)
+    r2_linear = 1.0 - sum(abs2, j_nn .- j_hat) / max(sum(abs2, j_nn .- mean(j_nn)), 1.0e-16)
+
+    alpha_fit = -xi[2]
+    m_fit     = -xi[5]
+    # Undo the eta centering: log(i0) = xi_1 - xi_eta * eta_bar (meaningful when only {1, eta, log(1+delta)} survive)
+    i0_fit    = exp(xi[1] - xi[2] * eta_bar)
+
+    terms = String[]
+    for j in eachindex(xi)
+        if active[j] && abs(xi[j]) > 0.0
+            coeff_str = string(round(xi[j], sigdigits = 4))
+            push!(terms, basis_names[j] == "1" ? coeff_str : "$(coeff_str) * $(basis_names[j])")
+        end
+    end
+    eq_str = "log(-j_deg) = " * (isempty(terms) ? "0.0" : join(terms, " + ")) *
+             "   (eta, theta_n centered at $(round(eta_bar, sigdigits = 4)), $(round(th_bar, sigdigits = 4)))"
+
+    if print_result
+        println("======================================================================")
+        println("Free-Form SINDy Distillation (log-space STLSQ, alpha not fixed):")
+        println("  Library       : ", join(basis_names, ", "))
+        println("  Active terms  : ", join(basis_names[active], ", "))
+        println("  Recovered Law : $(eq_str)")
+        println("  Fitted alpha  : $(round(alpha_fit, digits = 4)) V^-1 (reference beta F/(R T) = $(round(alpha_theory, digits = 4)))")
+        println("  Diffusion exp : $(round(m_fit, digits = 4)) (theory 1)")
+        println("  Fitted i0     : $(round(i0_fit, sigdigits = 4)) A/m^2")
+        println("  R^2 (log)     : $(round(r2_log, digits = 5)) | R^2 (linear j_deg): $(round(r2_linear, digits = 5))")
+        println("======================================================================")
+    end
+
+    return SINDyFreeformResult(
+        basis_names,
+        xi,
+        active,
+        r2_log,
+        r2_linear,
+        alpha_fit,
+        alpha_theory,
+        m_fit,
+        i0_fit,
+        eq_str,
+    )
+end
