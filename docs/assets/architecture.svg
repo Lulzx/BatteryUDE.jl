@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" width="100%" height="auto" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="physGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="nnGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="sindyGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowAccent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+  </defs>
+
+  <!-- Background Card -->
+  <rect x="0" y="0" width="960" height="280" rx="14" fill="url(#bgGrad)"/>
+  <rect x="1" y="1" width="958" height="278" rx="13" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="480" y="34" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700" letter-spacing="0.5">
+    BatteryUDE.jl — Differentiable SPMeT PDE + Neural SEI Surrogate + Symbolic SINDy Distillation
+  </text>
+
+  <!-- Box 1: Conservative FVM SPMeT Core -->
+  <rect x="30" y="60" width="275" height="190" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+  <rect x="30" y="60" width="275" height="34" rx="10" fill="url(#physGrad)"/>
+  <text x="167.5" y="82" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">
+    1. Conservative FVM SPMeT PDE (45 States)
+  </text>
+  <text x="46" y="114" fill="#e2e8f0" font-size="12" font-weight="600">• Spherical Solid Diffusion (N_r = 12/elec):</text>
+  <text x="56" y="132" fill="#94a3b8" font-size="11" font-family="monospace">dc̃_s/dt = (r₊²F₊ - r₋²F₋) / V_i</text>
+  <text x="46" y="154" fill="#e2e8f0" font-size="12" font-weight="600">• Axial Electrolyte FVM (N_x = 16):</text>
+  <text x="56" y="172" fill="#94a3b8" font-size="11" font-family="monospace">D_e^eff = D_e ε_e^1.5 (Harmonic Mean)</text>
+  <text x="46" y="194" fill="#e2e8f0" font-size="12" font-weight="600">• Exact Mass Conservation:</text>
+  <text x="56" y="212" fill="#38bdf8" font-size="11" font-family="monospace">|ΔN_Li / N_Li(0)| &lt; 1.2 × 10⁻¹⁵</text>
+  <text x="46" y="236" fill="#cbd5e1" font-size="11"> Butler-Volmer + Thermal + Film Drop V_cell(t)</text>
+
+  <!-- Box 2: Lux.jl Neural SEI UDE -->
+  <rect x="345" y="60" width="275" height="190" rx="10" fill="#1e293b" stroke="#a855f7" stroke-width="2"/>
+  <rect x="345" y="60" width="275" height="34" rx="10" fill="url(#nnGrad)"/>
+  <text x="482.5" y="82" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">
+    2. Lux.jl Neural SEI Surrogate (UDE)
+  </text>
+  <text x="361" y="114" fill="#e2e8f0" font-size="12" font-weight="600">• Normalized Surface Features z_sei:</text>
+  <text x="371" y="132" fill="#94a3b8" font-size="11" font-family="monospace">[θ_n^surf, j_tot/10, η̃_sei, δ̃_sei]</text>
+  <text x="361" y="154" fill="#e2e8f0" font-size="12" font-weight="600">• Thermodynamic Cathodic Constraint:</text>
+  <text x="371" y="172" fill="#c084fc" font-size="11" font-family="monospace">j_deg = -j_scale · softplus(NN_θ(z)) ≤ 0</text>
+  <text x="361" y="194" fill="#e2e8f0" font-size="12" font-weight="600">• Coupled Multi-Cycle Aging States:</text>
+  <text x="371" y="212" fill="#94a3b8" font-size="11" font-family="monospace">dδ̃_sei/dt, dε_e,n/dt, dQ_lli/dt ∝ -j_deg</text>
+  <text x="361" y="236" fill="#cbd5e1" font-size="11">InterpolatingAdjoint + ZygoteVJP (cos = 1.0)</text>
+
+  <!-- Box 3: Symbolic SINDy Recovery -->
+  <rect x="660" y="60" width="270" height="190" rx="10" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+  <rect x="660" y="60" width="270" height="34" rx="10" fill="url(#sindyGrad)"/>
+  <text x="795" y="82" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">
+    3. Training &amp; SINDy Law Distillation
+  </text>
+  <text x="676" y="114" fill="#e2e8f0" font-size="12" font-weight="600">• Two-Stage Curriculum Optimization:</text>
+  <text x="686" y="132" fill="#94a3b8" font-size="11" font-family="monospace">Adam(5e-3) → L-BFGS (207.5× loss ↓)</text>
+  <text x="676" y="154" fill="#e2e8f0" font-size="12" font-weight="600">• Holdout Extrapolation (Cycles 19–25):</text>
+  <text x="686" y="172" fill="#34d399" font-size="11" font-family="monospace">Voltage RMSE = 0.76 mV (&lt; 5 mV gate)</text>
+  <text x="676" y="194" fill="#e2e8f0" font-size="12" font-weight="600">• Sparse STLSQ Analytical Recovery:</text>
+  <text x="686" y="212" fill="#34d399" font-size="11" font-family="monospace">j_deg = -i_0,sei exp(-αη_sei)/(1+δ̃_sei)</text>
+  <text x="676" y="236" fill="#cbd5e1" font-size="11">Closed-Form Equation Extracted (R² = 0.962)</text>
+
+  <!-- Arrows -->
+  <line x1="305" y1="135" x2="341" y2="135" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="345" y1="175" x2="309" y2="175" stroke="#c084fc" stroke-width="2" marker-end="url(#arrowAccent)"/>
+  <line x1="620" y1="155" x2="656" y2="155" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>

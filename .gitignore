@@ -1,0 +1,7 @@
+# Julia artifacts & temporary files
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+Manifest.toml
+docs/assets/*.csv
+.DS_Store
